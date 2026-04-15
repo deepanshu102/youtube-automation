@@ -1,0 +1,144 @@
+{
+    "name": "AI Reel Generator (Fixed)",
+    "nodes": [
+        {
+            "parameters": {},
+            "id": "1",
+            "name": "Manual Trigger",
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                200,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "https://trends.google.com/trending/rss?geo=IN",
+                "responseFormat": "string"
+            },
+            "id": "2",
+            "name": "Google Trends RSS",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 2,
+            "position": [
+                400,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const xml = items[0].json;\nconst matches = [...xml.matchAll(/<title><![CDATA[(.*?)\]\]><\/title>/g)];\nreturn matches.slice(1, 6).map(m => ({ json: { title: m[1] } }));"
+            },
+            "id": "3",
+            "name": "Extract Titles",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                600,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const keywords = ["ai","tech","software","startup","coding","google","openai","meta","cloud"];\nreturn items.filter(item => keywords.some(k => item.json.title.toLowerCase().includes(k)));"
+            },
+            "id": "4",
+            "name": "Filter IT Topics",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                800,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "http://localhost:11434/api/generate",
+                "method": "POST",
+                "jsonParameters": true,
+                "bodyParametersJson": "{\n  "model": "phi3",\n  "prompt": "Create a viral 30-sec YouTube Shorts script. Return ONLY valid JSON. Topic: {
+                    {$json[\"title\"]}}. Format: {\"hook\":\"\",\"scenes\":[{\"text\":\"\",\"visual_prompt\":\"\",\"duration\":3}]}",\n  "stream": false
+                        }"
+                    },
+                    "id": "5",
+                    "name": "Ollama Script Generator",
+                    "type": "n8n-nodes-base.httpRequest",
+                    "typeVersion": 2,
+                    "position": [
+                        1000,
+                        300
+                    ]
+                },
+                {
+                    "parameters": {
+                        "functionCode": "let raw = items[0].json.response;\ntry {\n  let data = JSON.parse(raw);\n  return data.scenes.map(scene => ({ json: scene }));\n} catch (e) {\n  throw new Error("Invalid JSON from Ollama: " + raw);\n}"
+                    },
+                    "id": "6",
+                    "name": "Parse & Split Scenes",
+                    "type": "n8n-nodes-base.function",
+                    "typeVersion": 1,
+                    "position": [
+                        1200,
+                        300
+                    ]
+                }
+            ],
+            "connections": {
+                "Manual Trigger": {
+                    "main": [
+                        [
+                            {
+                                "node": "Google Trends RSS",
+                                "type": "main",
+                                "index": 0
+                            }
+                        ]
+                    ]
+                },
+                "Google Trends RSS": {
+                    "main": [
+                        [
+                            {
+                                "node": "Extract Titles",
+                                "type": "main",
+                                "index": 0
+                            }
+                        ]
+                    ]
+                },
+                "Extract Titles": {
+                    "main": [
+                        [
+                            {
+                                "node": "Filter IT Topics",
+                                "type": "main",
+                                "index": 0
+                            }
+                        ]
+                    ]
+                },
+                "Filter IT Topics": {
+                    "main": [
+                        [
+                            {
+                                "node": "Ollama Script Generator",
+                                "type": "main",
+                                "index": 0
+                            }
+                        ]
+                    ]
+                },
+                "Ollama Script Generator": {
+                    "main": [
+                        [
+                            {
+                                "node": "Parse & Split Scenes",
+                                "type": "main",
+                                "index": 0
+                            }
+                        ]
+                    ]
+                }
+            }
+        }

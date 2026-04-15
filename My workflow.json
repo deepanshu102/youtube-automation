@@ -1,0 +1,241 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "02552ea5-23ad-4523-8d46-c1e7322df76e",
+      "name": "When clicking ‘Execute workflow’",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "url": "https://www.producthunt.com/feed",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        -16
+      ],
+      "id": "25a4b438-396b-4bf8-bc70-ba9a4d5293be",
+      "name": "HTTP Request",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all()\nconst xml = items[0].json.data;\nconst matches = [...xml.matchAll(/<title>(.*?)<\\/title>/g)];\nreturn matches.slice(1, 100).map(m => ({\n  json: {\n    title: m[1]\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        0
+      ],
+      "id": "30cc3a32-73b6-4d2c-8c05-c74fc76643e5",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const keywords = ['ai','tech','software','startup','coding','ipl'];\nreturn items.filter(item =>\n  keywords.some(k => item.json.title.toLowerCase().includes(k))\n);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "id": "658df95b-70c3-4f50-9be1-8203290a4835",
+      "name": "Code in JavaScript",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n\"model\": \"llama-3.3-70b-versatile\",\n\"messages\": [\n    {\n\"role\": \"user\",\n  \"content\": \"Give a short reel script for topic: {{$json.title}}\"\n  }\n  ],\n  \"temperature\": 0.7,\n\"max_tokens\": 350\n}",
+        "options": {
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        992,
+        -80
+      ],
+      "id": "966f8073-a319-4783-9e00-95901c708b9f",
+      "name": "HTTP Request2",
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const allData = $input.all();\nlet combinedTitles = [];\n\nfor (const item of allData) {\n  const xml = item.json.data || \"\";\n  // Regular expression to catch titles in various RSS formats\n  const matches = [...xml.matchAll(/<title>(.*?)<\\/title>/g)];\n  \n  // Skip the first title (usually the channel/feed title)\n  const titles = matches.slice(1).map(m => ({\n    json: { title: m[1] }\n  }));\n  \n  combinedTitles = combinedTitles.concat(titles);\n}\n\nreturn combinedTitles;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -176
+      ],
+      "id": "2581f4ba-59b0-4388-8e7d-1669a9b71870",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/technology/.rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        272,
+        -208
+      ],
+      "id": "c8eebdda-8600-427b-9d67-36aed56c7c2d",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/programming/.rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        160
+      ],
+      "id": "cc02fcb2-c780-4fa2-b4e3-0a5bc5cbb340",
+      "name": "HTTP Request3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "f2b35945-66ef-4c3a-90d9-bc93ce1a8921",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3c31358f239aae23c5628d734d29f2dcf1adc0a9b38affca96cf63a28f652133"
+  },
+  "id": "OuRQXSRiPxL5tMXL",
+  "tags": []
+}

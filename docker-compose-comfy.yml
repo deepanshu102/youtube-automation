@@ -1,0 +1,10 @@
+services:
+  comfyui:
+    image: ghcr.io/ai-dock/comfyui:latest-cpu  # Optimized for Intel Mac (no GPU)
+    container_name: comfyui
+    ports:
+      - "8188:8188"
+      - "1111:1111"  # Required for the login portal
+    environment:
+      - WEB_PASSWORD=password123  # Set your own password here to avoid searching logs
+    restart: unless-stopped

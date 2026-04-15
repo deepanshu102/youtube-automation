@@ -1,0 +1,21 @@
+services:
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  comfyui:
+    image: ghcr.io/ai-dock/comfyui:latest-cpu
+    container_name: comfyui
+    ports:
+      - "8188:8188"
+      - "1111:1111"
+    environment:
+      - WEB_PASSWORD=password123
+    volumes:
+      - ./comfyui_data:/workspace
+    restart: unless-stopped

@@ -1,0 +1,333 @@
+{
+    "name": "AI Reel Generator - n8n + ComfyUI Integration",
+    "nodes": [
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                0,
+                0
+            ],
+            "id": "trigger-01",
+            "name": "When clicking 'Execute workflow'"
+        },
+        {
+            "parameters": {
+                "url": "https://www.producthunt.com/feed",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                288,
+                -16
+            ],
+            "id": "http-fetch-producthunt",
+            "name": "Fetch Product Hunt Feed",
+            "alwaysOutputData": true,
+            "retryOnFail": true
+        },
+        {
+            "parameters": {
+                "url": "https://www.reddit.com/r/technology/.rss",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                272,
+                -208
+            ],
+            "id": "http-fetch-reddit-tech",
+            "name": "Fetch Reddit Technology Feed",
+            "alwaysOutputData": true,
+            "retryOnFail": true
+        },
+        {
+            "parameters": {
+                "url": "https://www.reddit.com/r/programming/.rss",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                288,
+                160
+            ],
+            "id": "http-fetch-reddit-prog",
+            "name": "Fetch Reddit Programming Feed",
+            "alwaysOutputData": true,
+            "retryOnFail": true
+        },
+        {
+            "parameters": {
+                "jsCode": "const items=$input.all()\nconst xml = items[0].json.data;\nconst matches = [...xml.matchAll(/<title>(.*?)<\\/title>/g)];\nreturn matches.slice(1, 10).map(m => ({\n  json: {\n    title: m[1],\n    source: 'ProductHunt'\n  }\n}));"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                592,
+                0
+            ],
+            "id": "parse-titles",
+            "name": "Parse Titles from Feeds"
+        },
+        {
+            "parameters": {
+                "jsCode": "const keywords = ['ai','tech','software','startup','coding','automation','api','data'];\nreturn items.filter(item =>\n  keywords.some(k => item.json.title.toLowerCase().includes(k))\n);"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                800,
+                0
+            ],
+            "id": "filter-keywords",
+            "name": "Filter by Keywords",
+            "alwaysOutputData": true
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:11434/api/chat",
+                "sendHeaders": false,
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"model\": \"mistral\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Create a 30-second reel script for this tech topic: {{$json.title}}. Make it engaging and suitable for short-form video content. Format as a simple narrative script.\"\n    }\n  ],\n  \"stream\": false\n}",
+                "options": {
+                    "allowUnauthorizedCerts": false
+                }
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                992,
+                -80
+            ],
+            "id": "ollama-generate-script",
+            "name": "Ollama - Generate Script",
+            "alwaysOutputData": true,
+            "retryOnFail": true
+        },
+        {
+            "parameters": {
+                "jsCode": "const scriptContent = $json.response.message.content;\n\n// Extract key visual elements from script\nconst visualPrompt = `Create a visual representation for: ${$json.title}. Scene should be modern, tech-focused, professional, with vibrant colors and futuristic elements. Suitable for short-form video thumbnail or scene.`;\n\nreturn {\n  json: {\n    title: $json.title,\n    script: scriptContent,\n    imagePrompt: visualPrompt,\n    timestamp: new Date().toISOString()\n  }\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1200,
+                -80
+            ],
+            "id": "convert-to-image-prompt",
+            "name": "Convert Script to Image Prompt"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:8188/prompt",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"1\": {\n    \"inputs\": {\n      \"ckpt_name\": \"v1-5-pruned-emaonly.ckpt\"\n    },\n    \"class_type\": \"CheckpointLoaderSimple\"\n  },\n  \"2\": {\n    \"inputs\": {\n      \"text\": \"{{$json.imagePrompt}}\",\n      \"clip\": [\"1\", 1]\n    },\n    \"class_type\": \"CLIPTextEncode\"\n  },\n  \"3\": {\n    \"inputs\": {\n      \"text\": \"blurry, low quality, distorted, ugly, bad\",\n      \"clip\": [\"1\", 1]\n    },\n    \"class_type\": \"CLIPTextEncode\"\n  },\n  \"4\": {\n    \"inputs\": {\n      \"width\": 512,\n      \"height\": 512,\n      \"batch_size\": 1\n    },\n    \"class_type\": \"EmptyLatentImage\"\n  },\n  \"5\": {\n    \"inputs\": {\n      \"seed\": 12345,\n      \"steps\": 20,\n      \"cfg\": 7.5,\n      \"sampler_name\": \"euler\",\n      \"scheduler\": \"normal\",\n      \"denoise\": 1,\n      \"model\": [\"1\", 0],\n      \"positive\": [\"2\", 0],\n      \"negative\": [\"3\", 0],\n      \"latent_image\": [\"4\", 0]\n    },\n    \"class_type\": \"KSampler\"\n  },\n  \"6\": {\n    \"inputs\": {\n      \"samples\": [\"5\", 0],\n      \"vae\": [\"1\", 2]\n    },\n    \"class_type\": \"VAEDecode\"\n  },\n  \"7\": {\n    \"inputs\": {\n      \"filename_prefix\": \"{{$json.title.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_')}}\",\n      \"images\": [\"6\", 0]\n    },\n    \"class_type\": \"SaveImage\"\n  }\n}",
+                "options": {
+                    "allowUnauthorizedCerts": false
+                }
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.4,
+            "position": [
+                1400,
+                -80
+            ],
+            "id": "comfyui-generate-image",
+            "name": "ComfyUI - Generate Image",
+            "alwaysOutputData": true,
+            "retryOnFail": true
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $json;\n\nreturn {\n  json: {\n    title: $json.title,\n    script: $json.script,\n    imagePrompt: $json.imagePrompt,\n    comfyuiResponse: response,\n    status: 'generated',\n    timestamp: new Date().toISOString(),\n    output_path: `/Volumes/New\\ Volume/YOUTUBE/y-automation/comfyui_data/output/${$json.title.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_')}.png`\n  }\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1600,
+                -80
+            ],
+            "id": "format-output",
+            "name": "Format Final Output"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://localhost:3000/api/save-reel",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {\n              \"name\": \"Content-Type\",\n              \"value\": \"application/json\"\n            }\n          ]\n        },\n        "sendBody": true,\n        "specifyBody": "json",\n        "jsonBody": "={\n  \"title\": \"{{$json.title}}\",\n  \"script\": \"{{$json.script}}\",\n  \"imagePrompt\": \"{{$json.imagePrompt}}\",\n  \"status\": \"{{$json.status}}\",\n  \"timestamp\": \"{{$json.timestamp}}\",\n  \"outputPath\": \"{{$json.output_path}}\"\n}",
+                                "options": {
+                                    "allowUnauthorizedCerts": false
+                                }
+                            },
+                            "type": "n8n-nodes-base.httpRequest",
+                            "typeVersion": 4.4,
+                            "position": [
+                                1800,
+                                -80
+                            ],
+                            "id": "save-to-database",
+                            "name": "Save to Database (Optional)",
+                            "alwaysOutputData": true,
+                            "retryOnFail": false
+                        }
+                    ],
+                    "pinData": {},
+                    "connections": {
+                        "When clicking 'Execute workflow'": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Fetch Reddit Technology Feed",
+                                        "type": "main",
+                                        "index": 0
+                                    },
+                                    {
+                                        "node": "Fetch Product Hunt Feed",
+                                        "type": "main",
+                                        "index": 0
+                                    },
+                                    {
+                                        "node": "Fetch Reddit Programming Feed",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Fetch Product Hunt Feed": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Parse Titles from Feeds",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Fetch Reddit Technology Feed": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Parse Titles from Feeds",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Fetch Reddit Programming Feed": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Parse Titles from Feeds",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Parse Titles from Feeds": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Filter by Keywords",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Filter by Keywords": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Ollama - Generate Script",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Ollama - Generate Script": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Convert Script to Image Prompt",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Convert Script to Image Prompt": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "ComfyUI - Generate Image",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "ComfyUI - Generate Image": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Format Final Output",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        },
+                        "Format Final Output": {
+                            "main": [
+                                [
+                                    {
+                                        "node": "Save to Database (Optional)",
+                                        "type": "main",
+                                        "index": 0
+                                    }
+                                ]
+                            ]
+                        }
+                    },
+                    "active": false,
+                    "settings": {
+                        "executionOrder": "v1",
+                        "binaryMode": "separate"
+                    },
+                    "versionId": "advanced-comfyui-integration",
+                    "meta": {
+                        "instanceId": "production"
+                    },
+                    "id": "n8n-comfyui-chain",
+                    "tags": [
+                        "comfyui",
+                        "ollama",
+                        "automation",
+                        "ai-reel-generator"
+                    ]
+                }

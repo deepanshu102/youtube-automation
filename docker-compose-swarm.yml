@@ -1,0 +1,9 @@
+version: "3"
+
+services:
+  swarmui:
+    image: ghcr.io/stabilityai/swarmui:latest
+    container_name: swarmui
+    ports:
+      - "7801:7801"
+    restart: unless-stopped
